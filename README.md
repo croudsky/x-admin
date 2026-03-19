@@ -1,27 +1,113 @@
 # Oku
 
-X運用自動化アプリのモノレポです。
+Oku is a monorepo for an X automation platform built with `Next.js`, `NestJS`, `Prisma`, and `PostgreSQL`.
+
+It is designed for:
+
+- scheduled posting
+- AI-assisted draft generation
+- mention sync and reply workflows
+- approval-based publishing
+- analytics collection
+- multi-account ready operations
+- workspace and role-based access control
 
 ## Stack
 
-- Next.js
-- Nest.js
-- Prisma
-- PostgreSQL
-- Docker Compose
+- `apps/web`: Next.js admin UI
+- `apps/api`: NestJS API
+- `packages/shared`: shared types
+- `prisma`: Prisma schema and seed
+- `docs`: project documentation
+- `docker-compose.yml`: local web/api/worker/db environment
 
-## ディレクトリ
+## Features
 
-- `apps/web`: Next.js 管理画面
-- `apps/api`: Nest.js API
-- `packages/shared`: 共有型
-- `prisma`: データモデルとマイグレーション管理
-- `docs`: ドキュメント集約先
+- X OAuth 2.0 PKCE integration
+- OpenAI / Claude / Gemini settings
+- prompt template management
+- approval flow with batch review
+- worker + scheduler for dispatch and mention sync
+- fixed-reply rules for pinned posts
+- competitor analysis and learning profile
+- audit logs and notifications
+- workspace user roles: `owner / admin / editor / reviewer / viewer`
+- billing and usage limit groundwork
 
-## Docs
+## Quick Start
 
-- index: [docs/README.md](/Users/atsushi.kataoka/src/oku/docs/README.md)
-- setup: [docs/setup.md](/Users/atsushi.kataoka/src/oku/docs/setup.md)
-- architecture: [docs/mvp-architecture.md](/Users/atsushi.kataoka/src/oku/docs/mvp-architecture.md)
-- database: [docs/database-design.md](/Users/atsushi.kataoka/src/oku/docs/database-design.md)
-- X OAuth: [docs/x-oauth.md](/Users/atsushi.kataoka/src/oku/docs/x-oauth.md)
+1. Copy env file
+
+```bash
+cp .env.example .env
+```
+
+2. Install dependencies
+
+```bash
+pnpm install
+```
+
+3. Generate Prisma client
+
+```bash
+pnpm prisma:generate
+```
+
+4. Apply schema and seed data
+
+```bash
+pnpm prisma:push
+pnpm prisma:seed
+```
+
+5. Start with Docker
+
+```bash
+docker compose up --build
+```
+
+## Local URLs
+
+- Web: `http://localhost:3000`
+- API: `http://localhost:4000`
+- Health check: `http://localhost:4000/health`
+
+## Demo Login
+
+- email: `owner@oku.local`
+- password: `oku-demo-password`
+
+## Commands
+
+```bash
+pnpm dev:web
+pnpm dev:api
+pnpm build
+pnpm test
+pnpm prisma:generate
+pnpm prisma:push
+pnpm prisma:seed
+```
+
+More details:
+
+- [docs/README.md](./docs/README.md)
+- [docs/setup.md](./docs/setup.md)
+- [docs/current-mvp.md](./docs/current-mvp.md)
+- [docs/operations-flow.md](./docs/operations-flow.md)
+- [docs/scripts-and-build.md](./docs/scripts-and-build.md)
+
+## Repository Notes
+
+- This repository currently focuses on product and operations features first.
+- Billing enforcement and workspace isolation are implemented at the application layer.
+- Real X API usage requires valid app credentials and callback configuration.
+
+## Roadmap
+
+- stronger billing enforcement on X account connection count
+- richer tenant isolation for paid workspaces
+- production observability and admin tooling
+- billing provider integration
+
