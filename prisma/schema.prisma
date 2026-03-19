@@ -1,0 +1,474 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum XAccountStatus {
+  CONNECTED
+  DISCONNECTED
+}
+
+enum ApprovalMode {
+  AUTO
+  MANUAL
+}
+
+enum ContentKind {
+  POST
+  REPLY
+}
+
+enum ContentStatus {
+  DRAFT
+  QUEUED
+  AWAITING_APPROVAL
+  SCHEDULED
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MentionStatus {
+  NEW
+  REVIEWED
+  REPLIED
+  IGNORED
+}
+
+enum AIProvider {
+  OPENAI
+  CLAUDE
+  GEMINI
+}
+
+enum PromptTemplateKind {
+  BASE
+  TASK_POST
+  TASK_REPLY
+  SAFETY
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  EDITOR
+  REVIEWER
+  VIEWER
+}
+
+enum WorkspacePlanTier {
+  FREE
+  PRO
+  AGENCY
+}
+
+model Workspace {
+  id                 String             @id @default(cuid())
+  name               String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  users              User[]
+  userSessions       UserSession[]
+  xAccounts          XAccount[]
+  automationPolicies AutomationPolicy[]
+  contentJobs        ContentJob[]
+  analyticsSnapshots AnalyticsSnapshot[]
+  mentions           Mention[]
+  oauthSessions      XOAuthSession[]
+  aiProviderSettings AIProviderSetting[]
+  xAppCredentials    XAppCredential[]
+  promptTemplates    PromptTemplate[]
+  notificationEndpoints NotificationEndpoint[]
+  auditLogs          AuditLog[]
+  analysisReports    AnalysisReport[]
+  learningProfiles   LearningProfile[]
+  fixedReplyRules    FixedReplyRule[]
+  syncStates         XSyncState[]
+  billingSettings    WorkspaceBilling?
+  usageSnapshots     WorkspaceUsageSnapshot[]
+}
+
+model User {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  email        String      @unique
+  displayName  String
+  role         UserRole    @default(OWNER)
+  passwordHash String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  approvals    ContentApproval[]
+  sessions     UserSession[]
+
+  @@index([workspaceId, role])
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  workspaceId String
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, expiresAt])
+  @@index([userId, expiresAt])
+}
+
+model XAccount {
+  id               String             @id @default(cuid())
+  workspaceId      String
+  handle           String             @unique
+  displayName      String
+  xUserId          String?            @unique
+  status           XAccountStatus     @default(DISCONNECTED)
+  accessToken      String?
+  refreshToken     String?
+  tokenExpiresAt   DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  workspace        Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contentJobs      ContentJob[]
+  analytics        AnalyticsSnapshot[]
+  mentions         Mention[]
+  replySuggestions ReplySuggestion[]
+  oauthSessions    XOAuthSession[]
+  analysisReports  AnalysisReport[]
+  learningProfile  LearningProfile?
+  fixedReplyRules  FixedReplyRule[]
+  syncState        XSyncState?
+}
+
+model AutomationPolicy {
+  id               String       @id @default(cuid())
+  workspaceId      String
+  xAccountId       String?
+  approvalMode     ApprovalMode @default(MANUAL)
+  autoPostEnabled  Boolean      @default(false)
+  autoReplyEnabled Boolean      @default(false)
+  autoReplyPaused  Boolean      @default(false)
+  autoReplyPauseReason String?
+  autoReplyCooldownUntil DateTime?
+  maxAutoRepliesPerHour Int     @default(20)
+  maxAutoRepliesPerDay  Int     @default(100)
+  maxConsecutiveAutoReplies Int @default(10)
+  spikeLimit10Minutes Int       @default(15)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model ContentJob {
+  id               String            @id @default(cuid())
+  workspaceId      String
+  xAccountId       String
+  kind             ContentKind
+  status           ContentStatus     @default(DRAFT)
+  body             String
+  inReplyToPostId  String?
+  targetAuthorXUserId String?
+  targetAuthorHandle String?
+  scheduledAt      DateTime?
+  processingStartedAt DateTime?
+  retryCount       Int               @default(0)
+  nextRetryAt      DateTime?
+  lastError        String?
+  publishedAt      DateTime?
+  externalPostId   String?
+  sourcePrompt     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount         XAccount          @relation(fields: [xAccountId], references: [id], onDelete: Cascade)
+  approvals        ContentApproval[]
+  replySuggestion  ReplySuggestion?
+
+  @@index([workspaceId, status, scheduledAt])
+  @@index([xAccountId, kind, status])
+  @@index([xAccountId, targetAuthorXUserId, createdAt])
+}
+
+model ContentApproval {
+  id           String         @id @default(cuid())
+  contentJobId String
+  reviewerId   String
+  status       ApprovalStatus @default(PENDING)
+  note         String?
+  reviewedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  contentJob   ContentJob     @relation(fields: [contentJobId], references: [id], onDelete: Cascade)
+  reviewer     User           @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([contentJobId, status])
+}
+
+model Mention {
+  id               String            @id @default(cuid())
+  workspaceId      String
+  xAccountId       String
+  externalMentionId String           @unique
+  authorXUserId    String?
+  authorHandle     String
+  body             String
+  referencedPostId String?
+  status           MentionStatus     @default(NEW)
+  mentionedAt      DateTime
+  createdAt        DateTime          @default(now())
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount         XAccount          @relation(fields: [xAccountId], references: [id], onDelete: Cascade)
+  replySuggestions ReplySuggestion[]
+
+  @@index([workspaceId, status, mentionedAt])
+  @@index([xAccountId, externalMentionId])
+}
+
+model ReplySuggestion {
+  id             String        @id @default(cuid())
+  mentionId      String
+  xAccountId     String
+  contentJobId   String?       @unique
+  body           String
+  confidence     Float?
+  createdAt      DateTime      @default(now())
+  mention        Mention       @relation(fields: [mentionId], references: [id], onDelete: Cascade)
+  xAccount       XAccount      @relation(fields: [xAccountId], references: [id], onDelete: Cascade)
+  contentJob     ContentJob?   @relation(fields: [contentJobId], references: [id], onDelete: SetNull)
+}
+
+model AnalyticsSnapshot {
+  id             String      @id @default(cuid())
+  workspaceId    String
+  xAccountId     String
+  snapshotDate   DateTime
+  impressions    Int         @default(0)
+  engagements    Int         @default(0)
+  followersCount Int         @default(0)
+  followersDelta Int         @default(0)
+  createdAt      DateTime    @default(now())
+  workspace      Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount       XAccount    @relation(fields: [xAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([xAccountId, snapshotDate])
+  @@index([workspaceId, snapshotDate])
+}
+
+model XOAuthSession {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  xAccountId   String?
+  state        String    @unique
+  codeVerifier String
+  redirectUri  String
+  scopes       String
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount     XAccount? @relation(fields: [xAccountId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, expiresAt])
+}
+
+model AIProviderSetting {
+  id           String     @id @default(cuid())
+  workspaceId  String
+  provider     AIProvider
+  apiKey       String
+  model        String
+  systemPrompt String?
+  isActive     Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@index([workspaceId, isActive])
+}
+
+model XAppCredential {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  clientId      String
+  clientSecret  String?
+  redirectUri   String
+  scopes        String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, isActive])
+}
+
+model PromptTemplate {
+  id          String             @id @default(cuid())
+  workspaceId String
+  kind        PromptTemplateKind
+  title       String
+  content     String
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, kind])
+  @@index([workspaceId, isActive])
+}
+
+model NotificationEndpoint {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  name                  String
+  webhookUrl            String
+  events                String
+  repeatIntervalMinutes Int       @default(0)
+  failureThresholdCount Int       @default(1)
+  lastDeliveredAt       DateTime?
+  lastDeliveredEventType String?
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, isActive])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  actorUserId String?
+  eventType   String
+  entityType  String
+  entityId    String?
+  summary     String
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model AnalysisReport {
+  id          String    @id @default(cuid())
+  workspaceId String
+  xAccountId  String?
+  source      String
+  label       String
+  handle      String
+  report      Json
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount    XAccount? @relation(fields: [xAccountId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([xAccountId, createdAt])
+}
+
+model LearningProfile {
+  id          String    @id @default(cuid())
+  workspaceId String
+  xAccountId  String    @unique
+  summary     String
+  patterns    Json?
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount    XAccount  @relation(fields: [xAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, updatedAt])
+}
+
+model FixedReplyRule {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  xAccountId         String
+  fixedPostId        String
+  fixedPostText      String
+  triggerPhrase      String?
+  requireLike        Boolean   @default(false)
+  requireRetweet     Boolean   @default(false)
+  requireFollow      Boolean   @default(false)
+  activeFrom         DateTime?
+  activeTo           DateTime?
+  maxRepliesPerAuthorPerDay Int @default(1)
+  excludedUserIds    Json?
+  replyTemplate      String
+  priority           Int       @default(0)
+  includeAuthorId    Boolean   @default(false)
+  includeAuthorHandle Boolean  @default(true)
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount           XAccount  @relation(fields: [xAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, isActive])
+  @@index([xAccountId, fixedPostId, isActive])
+  @@index([xAccountId, priority, updatedAt])
+}
+
+model XSyncState {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  xAccountId       String    @unique
+  lastMentionId    String?
+  nextPaginationToken String?
+  rateLimitedUntil DateTime?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  xAccount         XAccount  @relation(fields: [xAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, updatedAt])
+}
+
+model WorkspaceBilling {
+  id                     String            @id @default(cuid())
+  workspaceId            String            @unique
+  planTier               WorkspacePlanTier @default(FREE)
+  isBillingActive        Boolean           @default(true)
+  monthlyPriceJpy        Int               @default(0)
+  maxXAccounts           Int               @default(1)
+  maxMonthlyContentJobs  Int               @default(100)
+  maxMonthlyAiGenerations Int              @default(120)
+  maxMonthlyMentionSyncs Int               @default(200)
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  workspace              Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model WorkspaceUsageSnapshot {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  periodStart        DateTime
+  periodEnd          DateTime
+  contentJobsCreated Int       @default(0)
+  aiGenerations      Int       @default(0)
+  mentionSyncRuns    Int       @default(0)
+  importedMentions   Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, periodStart, periodEnd])
+  @@index([workspaceId, updatedAt])
+}

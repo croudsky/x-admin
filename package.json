@@ -1,0 +1,26 @@
+{
+  "name": "oku",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.7.0",
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "vitest run",
+    "prisma:generate": "PRISMA_GENERATE_SKIP_AUTOINSTALL=1 prisma generate --schema prisma/schema.prisma",
+    "prisma:push": "prisma db push --schema prisma/schema.prisma",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "node prisma/seed.mjs",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.5.0",
+    "vitest": "^3.2.4"
+  }
+}
